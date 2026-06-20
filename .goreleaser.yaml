@@ -1,5 +1,4 @@
 project_name: killport
-project_url: https://github.com/Harshidpatel12/killport
 
 before:
   hooks:
