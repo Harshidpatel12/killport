@@ -33,7 +33,7 @@ Run the following command to automatically download the correct pre-compiled bin
 curl -fsSL https://raw.githubusercontent.com/Harshidpatel12/killport/main/install.sh | bash
 ```
 
-*(Note: The install script will become active once the automated release pipeline is configured).*
+The script auto-detects your OS and CPU architecture, downloads the correct pre-compiled binary from the [Releases](https://github.com/Harshidpatel12/killport/releases) page, and installs it to `/usr/local/bin`.
 
 #### Option B: Manual Binary Download (Zero Dependencies)
 1. Navigate to the [Releases](https://github.com/Harshidpatel12/killport/releases) page.
@@ -97,6 +97,17 @@ This project uses standard Go tools and `pre-commit` hooks to maintain code styl
 ```bash
 go test -v ./...
 ```
+
+### 📦 Creating a Release
+This project uses [GoReleaser](https://goreleaser.com/) to automatically build cross-platform binaries and upload them to GitHub Releases.
+
+To publish a new release, tag a commit with a version and push:
+```bash
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+```
+
+This triggers the [Release GitHub Action](.github/workflows/release.yml), which compiles binaries for **Linux (amd64/arm64)** and **macOS (amd64/arm64)** and uploads them to the GitHub Releases page automatically. The `install.sh` script will then download the correct binary for the user's system.
 
 ---
 
