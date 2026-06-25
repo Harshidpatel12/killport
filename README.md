@@ -15,8 +15,9 @@ Never write complex `lsof -i :3000` and `kill -9 <PID>` chains again.
 
 - ⚡ **Zero Dependencies**: Compiles to a single static binary with no external runtimes needed.
 - 🔍 **Reliable Lookup**: Uses system-level port diagnostics to locate active process PIDs.
+- 🐳 **Docker Integration**: Automatically detects if a port is occupied by a Docker container and shows you how to terminate it.
 - 🛡️ **Safety Guard**: Automatically prevents self-termination if the tool is somehow matching its own process.
-- 🎨 **Clear Console Logs**: Reports how many processes were found, their PIDs, and their termination status.
+- 🎨 **Clear Console Logs**: Reports how many processes/containers were found, their details, and termination status.
 
 ---
 
@@ -65,18 +66,42 @@ go install github.com/Harshidpatel12/killport@latest
 
 ### 2. Usage
 
-To kill any process running on port `3000`:
+To kill any local process running on port `3000`:
 
 ```bash
 killport 3000
 ```
 
-#### Example Output:
+#### Example Output (Local Process):
 ```text
 Searching for processes on port 3000...
 Found 1 process(es) on port 3000: 12345
 Killing process with PID 12345...
 Successfully killed process 12345.
+```
+
+#### Example Output (Docker Container):
+If the port is occupied by one or more running Docker containers, `killport` will detect them instead of attempting to terminate host-level proxy processes:
+
+```text
+Port 3000 is occupied by Docker container(s):
+  - Container 'my-web-app' (ID: 8655be0e4e81)
+
+To kill the container(s), run:
+  killport --container my-web-app
+```
+
+#### Terminating Docker Containers
+
+You can terminate Docker containers directly by passing their name, ID, or the published port:
+
+```bash
+# Kill by container name or ID
+killport --container my-web-app
+killport -c 8655be0e4e81
+
+# Or kill all containers occupying port 3000
+killport --container 3000
 ```
 
 
