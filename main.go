@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -116,26 +117,87 @@ func findDockerContainers(port int) ([]DockerContainer, error) {
 		return nil, err
 	}
 
-	out, err := exec.Command(
-		"docker", "ps",
-		"--filter", fmt.Sprintf("publish=%d", port),
-		"--format", "{{.ID}}\t{{.Names}}",
-	).Output()
+	// 1. Get running container IDs
+	cmdIds := exec.Command("docker", "ps", "-q")
+	idsBytes, err := cmdIds.Output()
+	if err != nil {
+		return nil, err
+	}
+	idsStr := strings.TrimSpace(string(idsBytes))
+	if idsStr == "" {
+		return nil, nil
+	}
+	ids := strings.Fields(idsStr)
+
+	// 2. Inspect all running containers to get detailed networking info
+	args := append([]string{"inspect"}, ids...)
+	cmdInspect := exec.Command("docker", args...)
+	inspectBytes, err := cmdInspect.Output()
 	if err != nil {
 		return nil, err
 	}
 
+	var rawContainers []struct {
+		ID         string `json:"Id"`
+		Name       string `json:"Name"`
+		HostConfig struct {
+			NetworkMode string `json:"NetworkMode"`
+		} `json:"HostConfig"`
+		Config struct {
+			ExposedPorts map[string]interface{} `json:"ExposedPorts"`
+		} `json:"Config"`
+		NetworkSettings struct {
+			Ports map[string][]struct {
+				HostPort string `json:"HostPort"`
+			} `json:"Ports"`
+		} `json:"NetworkSettings"`
+	}
+
+	if err := json.Unmarshal(inspectBytes, &rawContainers); err != nil {
+		return nil, err
+	}
+
+	portStr := strconv.Itoa(port)
+	targetTcp := fmt.Sprintf("%d/tcp", port)
+	targetUdp := fmt.Sprintf("%d/udp", port)
+
 	var containers []DockerContainer
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line == "" {
-			continue
+	for _, c := range rawContainers {
+		matched := false
+
+		// Case A: Port binding (standard published port)
+		for _, bindings := range c.NetworkSettings.Ports {
+			for _, b := range bindings {
+				if b.HostPort == portStr {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				break
+			}
 		}
-		// Format is always "ID\tName" — we control the --format string.
-		id, name, _ := strings.Cut(line, "\t")
-		if name == "" {
-			name = id // degenerate guard; shouldn't happen with our format
+
+		// Case B: Host network mode + exposed port
+		if !matched && c.HostConfig.NetworkMode == "host" {
+			if c.Config.ExposedPorts != nil {
+				_, hasTcp := c.Config.ExposedPorts[targetTcp]
+				_, hasUdp := c.Config.ExposedPorts[targetUdp]
+				if hasTcp || hasUdp {
+					matched = true
+				}
+			}
 		}
-		containers = append(containers, DockerContainer{ID: id, Name: name})
+
+		if matched {
+			name := strings.TrimPrefix(c.Name, "/")
+			// Use 12 character short ID
+			shortID := c.ID
+			if len(shortID) > 12 {
+				shortID = shortID[:12]
+			}
+			containers = append(containers, DockerContainer{ID: shortID, Name: name})
+		}
 	}
 	return containers, nil
 }
